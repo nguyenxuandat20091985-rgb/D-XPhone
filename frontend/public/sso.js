@@ -36,14 +36,6 @@
       from: params.get('from') || ''
     };
 
-    function enterCallScreen() {
-      var lobby = document.getElementById('lobby');
-      var call = document.getElementById('call-screen');
-      if (lobby) lobby.classList.remove('active');
-      if (call) call.classList.add('active');
-      var st = document.getElementById('statusText');
-      if (st) st.textContent = 'Đang chờ đối phương vào phòng...';
-    }
 
     if (auto && room) {
       setTimeout(function () {
