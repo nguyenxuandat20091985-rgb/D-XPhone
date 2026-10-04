@@ -1,142 +1,85 @@
-# D-XPhone
+# D-XPhone v2.0
 
-**Ứng dụng gọi thoại & video 1-1 thời gian thực độc lập** sử dụng WebRTC + Node.js + Socket.io.
+**Ứng dụng gọi thoại & video 1-1 thời gian thực** – Production-ready.
 
-Thiết kế dạng **module/service độc lập**, có thể chạy riêng hoặc dễ dàng nhúng / gọi API vào các ứng dụng khác (ví dụ: mạng xã hội D-Social).
+Thiết kế module độc lập, có thể chạy riêng hoặc nhúng vào D-Social / ứng dụng khác.
 
-## Tính năng
+## Tính năng v2.0 (ổn định + chịu tải)
 
-- Gọi Audio (thoại) và Video 1-1 real-time
-- Signaling Server bằng Socket.io (Offer / Answer / ICE Candidate)
-- Sử dụng STUN công cộng miễn phí (Google)
-- Giao diện gọi điện hiện đại: video local + remote, tắt/bật mic, tắt/bật camera, cúp máy
-- Hoàn toàn mã nguồn mở, miễn phí
+- WebRTC P2P Audio + Video 1-1
+- Signaling Server (Socket.io) với **Redis adapter** → scale ngang
+- **Redis-backed room management** (TTL, không mất dữ liệu khi restart)
+- **JWT authentication** cho join room
+- **Rate limiting** chống spam
+- **Structured logging** (Winston)
+- Reconnection + ICE restart phía client
+- Cấu hình sẵn **TURN** (coturn)
+- **Docker Compose** full stack (Redis + Signaling + Frontend)
+- Health check + metrics cơ bản
 
-## Cấu trúc thư mục
+## Cấu trúc
 
 ```
 D-XPhone/
-├── backend/                  # Signaling Server (Node.js + Socket.io)
+├── backend/
+│   ├── src/
+│   │   ├── auth.js          # JWT
+│   │   ├── rooms.js         # Redis / memory room manager
+│   │   └── logger.js        # Winston
+│   ├── server.js
 │   ├── package.json
-│   └── server.js
-├── frontend/
-│   └── public/               # Giao diện client (có thể serve static)
-│       ├── index.html
-│       ├── styles.css
-│       └── app.js
-├── .gitignore
+│   ├── Dockerfile
+│   └── .env.example
+├── frontend/public/
+│   ├── index.html
+│   ├── styles.css
+│   └── app.js               # Client WebRTC + reconnection
+├── turn/
+│   └── turnserver.conf.example
+├── docker-compose.yml
 └── README.md
 ```
 
-## Yêu cầu hệ thống
-
-- Node.js >= 18
-- Trình duyệt hiện đại hỗ trợ WebRTC (Chrome, Firefox, Edge, Safari)
-- HTTPS (hoặc localhost) để truy cập camera/microphone
-
-## Cài đặt & Chạy nhanh
-
-### 1. Backend (Signaling Server)
+## Chạy nhanh với Docker (khuyến nghị)
 
 ```bash
-cd backend
-npm install
-npm start
+git clone https://github.com/nguyenxuandat20091985-rgb/D-XPhone.git
+cd D-XPhone
+docker compose up -d --build
+# Frontend:  http://localhost:3000
+# Signaling: http://localhost:3001/health
 ```
 
-Server chạy tại: `http://localhost:3001`
-
-### 2. Frontend
-
-Bạn có thể mở trực tiếp file `frontend/public/index.html` bằng Live Server (VS Code) hoặc serve bằng bất kỳ static server nào:
+## Chạy development
 
 ```bash
-# Ví dụ dùng npx serve
+# Redis
+docker run -d -p 6379:6379 redis:7-alpine
+
+# Backend
+cd backend && cp .env.example .env && npm install && npm start
+
+# Frontend
 npx serve frontend/public -p 3000
 ```
 
-Hoặc dùng Python:
+## API chính
 
-```bash
-cd frontend/public
-python -m http.server 3000
-```
+| Method | Path       | Mô tả                          |
+|--------|------------|--------------------------------|
+| GET    | `/health`  | Health check + Redis status    |
+| POST   | `/token`   | Lấy JWT (body: `{userId, roomId?}`) |
 
-Sau đó mở trình duyệt: `http://localhost:3000`
+## Cấu hình TURN (bắt buộc cho production)
 
-### 3. Kiểm thử
+1. Deploy coturn (xem `turn/turnserver.conf.example`)
+2. Mở firewall: 3478/tcp+udp, 5349/tcp, 49152-65535/udp
+3. Uncomment phần TURN trong `frontend/public/app.js`
 
-1. Mở 2 tab trình duyệt (hoặc 2 thiết bị khác nhau trong cùng mạng).
-2. Nhập **cùng một Room ID**.
-3. Nhấn **Tham gia cuộc gọi**.
-4. Cho phép quyền camera + microphone.
-5. Cuộc gọi sẽ được thiết lập tự động.
+## Scale ngang
 
-## Cấu hình STUN / TURN
-
-File `frontend/public/app.js` đã cấu hình sẵn STUN của Google:
-
-```js
-const ICE_SERVERS = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-  ]
-};
-```
-
-**Lưu ý quan trọng về NAT:**
-
-- STUN chỉ đủ khi cả 2 peer ở mạng công cộng hoặc NAT đơn giản.
-- Với mạng phức tạp (symmetric NAT, firewall), bạn **cần TURN server**.
-
-### Tự host TURN (khuyến nghị cho production)
-
-Sử dụng [coturn](https://github.com/coturn/coturn) (mã nguồn mở miễn phí):
-
-```bash
-# Ví dụ cấu hình coturn cơ bản (cần domain + public IP)
-# turnserver.conf
-listening-port=3478
-fingerprint
-lt-cred-mech
-user=dxphone:strongpassword
-realm=yourdomain.com
-```
-
-Sau đó thêm vào `ICE_SERVERS`:
-
-```js
-{
-  urls: 'turn:yourdomain.com:3478',
-  username: 'dxphone',
-  credential: 'strongpassword'
-}
-```
-
-## Tích hợp vào ứng dụng khác (D-Social)
-
-Vì D-XPhone được thiết kế module độc lập:
-
-1. **Signaling Server** có thể chạy như một microservice riêng (port 3001).
-2. Frontend có thể:
-   - Embed iframe
-   - Hoặc copy logic WebRTC (`app.js`) vào component của ứng dụng chính
-   - Gọi API health check `/health` để kiểm tra trạng thái service
-
-Ví dụ gọi từ ứng dụng khác:
-
-```js
-// Kết nối tới Signaling Server của D-XPhone
-const socket = io('https://signaling.yourdomain.com');
-```
-
-## Biến môi trường (Backend)
-
-| Biến       | Mặc định | Mô tả              |
-|------------|----------|--------------------|
-| `PORT`     | `3001`   | Port chạy server   |
+Chạy nhiều instance signaling (cùng REDIS_URL) + Load Balancer. Redis adapter đã bật sẵn.
 
 ## License
 
-MIT — Sử dụng tự do cho mục đích cá nhân & thương mại.
+MIT
