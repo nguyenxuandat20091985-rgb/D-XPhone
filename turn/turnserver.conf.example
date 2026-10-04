@@ -1,0 +1,28 @@
+# coturn configuration example for D-XPhone
+# Copy to turnserver.conf and adjust for your server
+
+listening-port=3478
+tls-listening-port=5349
+listening-ip=0.0.0.0
+relay-ip=YOUR_PUBLIC_IP
+external-ip=YOUR_PUBLIC_IP
+
+fingerprint
+lt-cred-mech
+use-auth-secret
+# Or simple user:
+# user=dxphone:StrongPasswordHere
+
+realm=turn.yourdomain.com
+server-name=turn.yourdomain.com
+
+min-port=49152
+max-port=65535
+
+verbose
+log-file=/var/log/turn.log
+
+no-multicast-peers
+no-cli
+no-tlsv1
+no-tlsv1_1
