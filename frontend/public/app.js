@@ -12,7 +12,7 @@
   const SIGNALING_SERVER =
     window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
       ? 'http://localhost:3001'
-      : (window.DXPHONE_SIGNALING_URL || window.location.origin);
+      : (window.DXPHONE_SIGNALING_URL || 'https://d-xphone-signaling.onrender.com');
 
   const ICE_SERVERS = {
     iceServers: [
@@ -38,6 +38,8 @@
   let timerInterval = null;
   let isMicOn = true;
   let isCamOn = true;
+  const callParams = new URLSearchParams(window.location.search);
+  const isVideoCall = callParams.get('mode') !== 'audio' && callParams.get('video') !== '0';
   let currentRoomId = null;
   let authToken = null;
   let reconnectAttempts = 0;
@@ -88,12 +90,15 @@
     btnJoin.textContent = 'Đang kết nối...';
     try {
       const constraints = {
-        video: { width: { ideal: 1280, max: 1920 }, height: { ideal: 720, max: 1080 }, facingMode: 'user', frameRate: { ideal: 24, max: 30 } },
+        video: isVideoCall ? { width: { ideal: 1280, max: 1920 }, height: { ideal: 720, max: 1080 }, facingMode: 'user', frameRate: { ideal: 24, max: 30 } } : false,
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
       };
       localStream = await navigator.mediaDevices.getUserMedia(constraints);
+      isCamOn = isVideoCall;
+      if (btnToggleCam) btnToggleCam.hidden = !isVideoCall;
       localVideo.srcObject = localStream;
-      authToken = await fetchToken(userName, roomId);
+      const sso = window.__DX_SSO__ || {};
+      authToken = await fetchToken(sso.uid || userName, roomId);
       connectSocket(userName);
     } catch (err) {
       console.error('startCall error:', err);
@@ -212,7 +217,7 @@
   async function createAndSendOffer() {
     if (!peerConnection) createPeerConnection();
     try {
-      const offer = await peerConnection.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
+      const offer = await peerConnection.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: isVideoCall });
       await peerConnection.setLocalDescription(offer);
       socket.emit('offer', { roomId: currentRoomId, offer, to: remoteSocketId || undefined });
     } catch (err) { console.error(err); }
@@ -261,7 +266,8 @@
     lobby.classList.add('active');
     resetJoinButton();
     statusText.textContent = 'Đang kết nối...';
-    isMicOn = true; isCamOn = true;
+    isMicOn = true; isCamOn = isVideoCall;
+    if (btnToggleCam) btnToggleCam.hidden = !isVideoCall;
     iconMicOn.classList.remove('hidden'); iconMicOff.classList.add('hidden');
     iconCamOn.classList.remove('hidden'); iconCamOff.classList.add('hidden');
     btnToggleMic.classList.remove('active'); btnToggleCam.classList.remove('active');
